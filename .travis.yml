@@ -1,0 +1,21 @@
+language: php
+dist: xenial
+
+services:
+  - docker
+
+php:
+  - 7.4
+
+script:
+- npm install backstopjs
+- echo "skipping tests"
+
+env:
+  global:
+    - XDEBUG_MODE=coverage
+
+install:
+  # - composer --verbose install
+  - echo "StrictHostKeyChecking no" > ~/.ssh/config
+  - .travis/deploy.sh
