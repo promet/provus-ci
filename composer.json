@@ -1,0 +1,27 @@
+{
+	"name": "sst/provus-ci",
+	"description": "CI component for Provus.",
+	"type": "drupal-library",
+	"homepage": "https://github.com/promet/provus-ci",
+	"authors": [{
+		"name": "Steve Zipfel",
+		"homepage": "https://github.com/szipfel"
+	}],
+	"support": {
+		"issues": "https://github.com/promet/provus-ci/issues"
+	},
+	"license": "GPL-2.0+",
+	"repositories": [{
+		"type": "package",
+		"package": {
+			"name": "sst/provus",
+			"version": "1.0",
+			"type": "add-on",
+			"source": {
+				"url": "https://github.com/promet/provus-ci.git",
+				"type": "git",
+				"reference": "refs/heads/master"
+			}
+		}
+	}]
+}
