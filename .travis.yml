@@ -5,11 +5,11 @@ services:
   - docker
 
 php:
-  - 7.4
+  - 8.0
 
 script:
-- npm install backstopjs
-- echo "skipping tests"
+ #- npm install backstopjs
+ - echo "skipping tests"
 
 env:
   global:
