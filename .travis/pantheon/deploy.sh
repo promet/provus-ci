@@ -145,7 +145,7 @@ else
   fi
 
   # if we're only testing delete the MD used for said tests.
-  if [ "$CURRENT_BRANCH" != "$PANTHEON_ENV" ]; then
-  $TERMINUS_BIN multidev:delete $PANTHEON_SITE_ID.ci-$TRAVIS_BUILD_NUMBER --delete-branch --yes
+  if [ "$CURRENT_BRANCH" != "$PANTHEON_ENV" ] && ["$KEEP_BRANCH" != "$CURRENT_BRANCH"]; then
+    $TERMINUS_BIN multidev:delete $PANTHEON_SITE_ID.ci-$TRAVIS_BUILD_NUMBER --delete-branch --yes
   fi
 fi
