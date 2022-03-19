@@ -37,6 +37,7 @@ sleep 120
 
 # Update the UUID of the site to match the incoming config UUID
 update_uuid() {
+  sleep 60
   UUID=$(awk '{for (I=1;I<=NF;I++) if ($I == "uuid:") {print $(I+1)};}' config/default/system.site.yml)
   echo "...Setting site UUID to $UUID"
   $TERMINUS_BIN drush -n $PANTHEON_SITE_ID.$1 cset system.site uuid ${UUID} -y
