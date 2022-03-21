@@ -12,7 +12,7 @@
 	},
 	"license": "GPL-2.0+",
 	"repositories": [{
-		"type": "package",
+		"type": "provus-tools",
 		"package": {
 			"name": "sst/provus",
 			"version": "1.0",
