@@ -10,18 +10,5 @@
 	"support": {
 		"issues": "https://github.com/promet/provus-ci/issues"
 	},
-	"license": "GPL-2.0+",
-	"repositories": [{
-		"type": "provus-tools",
-		"package": {
-			"name": "sst/provus",
-			"version": "1.0",
-			"type": "add-on",
-			"source": {
-				"url": "https://github.com/promet/provus-ci.git",
-				"type": "git",
-				"reference": "refs/heads/master"
-			}
-		}
-	}]
+	"license": "GPL-2.0+"
 }
