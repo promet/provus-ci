@@ -1,7 +1,7 @@
 {
 	"name": "sst/provus-ci",
 	"description": "CI component for Provus.",
-	"type": "drupal-library",
+	"type": "drupal-config",
 	"homepage": "https://github.com/promet/provus-ci",
 	"authors": [{
 		"name": "Steve Zipfel",
