@@ -37,6 +37,7 @@ sleep 120
 
 # Update the UUID of the site to match the incoming config UUID
 update_uuid() {
+  sleep 60
   UUID=$(awk '{for (I=1;I<=NF;I++) if ($I == "uuid:") {print $(I+1)};}' config/default/system.site.yml)
   echo "...Setting site UUID to $UUID"
   $TERMINUS_BIN drush -n $PANTHEON_SITE_ID.$1 cset system.site uuid ${UUID} -y
@@ -145,7 +146,7 @@ else
   fi
 
   # if we're only testing delete the MD used for said tests.
-  if [ "$CURRENT_BRANCH" != "$PANTHEON_ENV" ] && ["$KEEP_BRANCH" != "$CURRENT_BRANCH"]; then
+  if [[ "$CURRENT_BRANCH" != "$PANTHEON_ENV" && "$KEEP_BRANCH" != "$CURRENT_BRANCH" ]]; then
     $TERMINUS_BIN multidev:delete $PANTHEON_SITE_ID.ci-$TRAVIS_BUILD_NUMBER --delete-branch --yes
   fi
 fi
