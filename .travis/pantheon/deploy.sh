@@ -47,7 +47,9 @@ update_uuid() {
 clean_artifacts() {
   make_heading "...Generating site artifacts"
 
-  cp hosting/pantheon/* .
+  cp hosting/pantheon/pantheon.upstream.yml .
+  cp hosting/pantheon/pantheon.yml .
+  cp hosting/pantheon/settings.pantheon.php web/sites/default/
   rm -rf .docksal
   rm -rf web/sites/default/files
   rm -rf hosting
