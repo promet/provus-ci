@@ -45,6 +45,10 @@ sleep 120
 
 check_error() {
    if [ $1 -ne 0 ]; then
+    echo "========================================="
+    echo "...Build failure.. Deleting MD if created"
+    echo "========================================="
+    delete_md
     exit 1
   fi
 }
@@ -80,6 +84,14 @@ make_heading() {
 remove_nests_git() {
   find web/ | grep .git | xargs rm -rf
   find vendor/ | grep .git | xargs rm -rf
+}
+
+delete_md() {
+   if [[ "$CURRENT_BRANCH" != "$PANTHEON_ENV" && "$KEEP_BRANCH" != "$CURRENT_BRANCH" ]]; then
+    $TERMINUS_BIN multidev:delete $PANTHEON_SITE_ID.ci-$TRAVIS_BUILD_NUMBER --delete-branch --yes
+    # if it fails - report the fail and
+    check_error "$?"
+  fi
 }
 
 make_heading "Starting Build"
@@ -122,7 +134,7 @@ else
     echo "...Delete MD if it already exists"
     $TERMINUS_BIN multidev:delete $PANTHEON_SITE_ID.ci-$TRAVIS_BUILD_NUMBER --delete-branch --yes
     # if it fails - report the fail and
-    check_error "$?"
+    #check_error "$?"
 
     echo "...Building Mutlidev ci-$TRAVIS_BUILD_NUMBER"
     $TERMINUS_BIN multidev:create $PANTHEON_SITE_ID.$PANTHEON_ENV ci-$TRAVIS_BUILD_NUMBER --yes
@@ -168,10 +180,5 @@ else
     make_heading "... No buildable branches detected"
   fi
 
-  # if we're only testing delete the MD used for said tests.
-  if [[ "$CURRENT_BRANCH" != "$PANTHEON_ENV" && "$KEEP_BRANCH" != "$CURRENT_BRANCH" ]]; then
-    $TERMINUS_BIN multidev:delete $PANTHEON_SITE_ID.ci-$TRAVIS_BUILD_NUMBER --delete-branch --yes
-    # if it fails - report the fail and
-    check_error "$?"
-  fi
+  delete_md
 fi
