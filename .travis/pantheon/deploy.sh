@@ -2,7 +2,23 @@
 
 CURRENT_BRANCH=`git name-rev --name-only HEAD`
 CURRENT_TAG=`git name-rev --tags --name-only $(git rev-parse HEAD)`
-TERMINUS_BIN=scripts/bin/terminus
+make_heading "Settings up Terminus for Pantheon"
+setup_terminus
+$TERMINUS_BIN self:plugin:install terminus-build-tools-plugin
+
+
+##########################
+# FUNCTIONS
+##########################
+setup_terminus() {
+  cd scripts/bin
+  curl -L https://github.com/pantheon-systems/terminus/releases/download/3.0.6/terminus.phar --output terminus
+  chmod +x terminus
+  ./terminus self:update
+  sudo ln -s ~/terminus/terminus terminus
+  TERMINUS_BIN=scripts/bin/terminus
+  cd ../../
+}
 
 quiet_git() {
   stdout=$(tempfile)
@@ -25,7 +41,7 @@ sleep 120
   echo "...Clearing caches"
   echo "========================================="
   $TERMINUS_BIN env:clear-cache $PANTHEON_SITE_ID.$1
-   # if it fails - report the fail and
+  # if it fails - report the fail and
   check_error "$?"
 
   echo "========================================="
@@ -39,18 +55,8 @@ sleep 120
   echo "...Running update DB"
   echo "========================================="
   $TERMINUS_BIN drush -n $PANTHEON_SITE_ID.$1 updb -y
- # if it fails - report the fail and
+  # if it fails - report the fail and
   check_error "$?"
-}
-
-check_error() {
-   if [ $1 -ne 0 ]; then
-    echo "========================================="
-    echo "...Build failure.. Deleting MD if created"
-    echo "========================================="
-    delete_md
-    exit 1
-  fi
 }
 
 # Update the UUID of the site to match the incoming config UUID
@@ -67,9 +73,7 @@ update_uuid() {
 clean_artifacts() {
   make_heading "...Generating site artifacts"
 
-  cp hosting/pantheon/pantheon.upstream.yml .
-  cp hosting/pantheon/pantheon.yml .
-  cp hosting/pantheon/settings.pantheon.php web/sites/default/
+  cp hosting/pantheon/* .
   rm -rf .docksal
   rm -rf web/sites/default/files
   rm -rf hosting
@@ -86,6 +90,27 @@ remove_nests_git() {
   find vendor/ | grep .git | xargs rm -rf
 }
 
+check_error() {
+   if [ $1 -ne 0 ]; then
+    echo "========================================="
+    echo "...Build failure.. Deleting MD if created"
+    echo "========================================="
+    delete_md
+    exit 1
+  fi
+}
+
+make_mulitdev() {
+    echo "...Delete MD if it already exists"
+    $TERMINUS_BIN multidev:delete $PANTHEON_SITE_ID.ci-$TRAVIS_BUILD_NUMBER --delete-branch --yes
+
+    echo "...Building Mutlidev ci-$TRAVIS_BUILD_NUMBER"
+    $TERMINUS_BIN multidev:create $PANTHEON_SITE_ID.$PANTHEON_ENV ci-$TRAVIS_BUILD_NUMBER --yes
+    # if it fails - report the fail and
+    check_error "$?"
+}
+
+# delete the pantheon multidev.. good for failed events before stopping
 delete_md() {
    if [[ "$CURRENT_BRANCH" != "$PANTHEON_ENV" && "$KEEP_BRANCH" != "$CURRENT_BRANCH" ]]; then
     $TERMINUS_BIN multidev:delete $PANTHEON_SITE_ID.ci-$TRAVIS_BUILD_NUMBER --delete-branch --yes
@@ -93,6 +118,10 @@ delete_md() {
     check_error "$?"
   fi
 }
+
+##########################
+# BUILD SCRIPT
+##########################
 
 make_heading "Starting Build"
 
@@ -117,13 +146,23 @@ remove_nests_git
 
 if [ $CURRENT_TAG != "undefined" ]; then
   make_heading "...Preparing for production deploy, fingers crossed!"
-  git checkout -b ci-$TRAVIS_BUILD_NUMBER
+  # Make multidevs
+  make_multidev
+
+  # Clean Artifcats
   clean_artifacts
+
+  echo "...Switch to new ci-$TRAVIS_BUILD_NUMBER branch locally"
+  git checkout -b ci-$TRAVIS_BUILD_NUMBER
+
   quiet_git add -f vendor/* web/* pantheon* config/*
   quiet_git commit -m "DEPLOY: Build $CURRENT_TAG"
   echo "...Push to pantheon"
-  git push pantheon ci-$TRAVIS_BUILD_NUMBER:$REMOTE_PROD_BRANCH --force
-  make_heading "branch: $REMOTE_PROD_BRANCH"
+  git push pantheon ci-$TRAVIS_BUILD_NUMBER --force
+
+  make_heading "Merge branch ci-$TRAVIS_BUILD_NUMBER into $REMOTE_PROD_BRANCH"
+  $TERMINUS_BIN build:env:merge -n $PANTHEON_SITE_ID.ci-$TRAVIS_BUILD_NUMBER --yes
+
   update_uuid "$REMOTE_PROD_ENV"
   update_site "$REMOTE_PROD_ENV"
 
@@ -131,15 +170,7 @@ else
   if [ "$CURRENT_BRANCH" != "$PANTHEON_ENV" ]; then
     make_heading "...Building Branch on new Multidev"
 
-    echo "...Delete MD if it already exists"
-    $TERMINUS_BIN multidev:delete $PANTHEON_SITE_ID.ci-$TRAVIS_BUILD_NUMBER --delete-branch --yes
-    # if it fails - report the fail and
-    #check_error "$?"
-
-    echo "...Building Mutlidev ci-$TRAVIS_BUILD_NUMBER"
-    $TERMINUS_BIN multidev:create $PANTHEON_SITE_ID.$PANTHEON_ENV ci-$TRAVIS_BUILD_NUMBER --yes
-    # if it fails - report the fail and
-    check_error "$?"
+    make_multidev
 
     # Clean up the codebase before sending
     clean_artifacts
@@ -180,5 +211,6 @@ else
     make_heading "... No buildable branches detected"
   fi
 
+  # if we're only testing delete the MD used for said tests.
   delete_md
 fi
