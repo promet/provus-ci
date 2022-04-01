@@ -182,7 +182,9 @@ else
     quiet_git add -f vendor/* web/* pantheon* config/*
     quiet_git commit -m "Artifacts for build ci-$TRAVIS_BUILD_NUMBER"
     echo "...Push to pantheon"
-    git push pantheon ci-$TRAVIS_BUILD_NUMBER --force
+    #git push pantheon ci-$TRAVIS_BUILD_NUMBER --force
+    $TERMINUS_BIN build:env:push $PANTHEON_SITE_ID.$PANTHEON_ENV
+
     P_ENV="ci-$TRAVIS_BUILD_NUMBER"
     #clean up / Site updates.
     update_uuid "$P_ENV"
