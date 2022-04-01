@@ -2,9 +2,6 @@
 
 CURRENT_BRANCH=`git name-rev --name-only HEAD`
 CURRENT_TAG=`git name-rev --tags --name-only $(git rev-parse HEAD)`
-make_heading "Settings up Terminus for Pantheon"
-setup_terminus
-$TERMINUS_BIN self:plugin:install terminus-build-tools-plugin
 
 
 ##########################
@@ -73,7 +70,8 @@ update_uuid() {
 clean_artifacts() {
   make_heading "...Generating site artifacts"
 
-  cp hosting/pantheon/* .
+  cp hosting/pantheon/pantheon.upstream.yml .
+  cp hosting/pantheon/settings.pantheon.php web/sites/default/
   rm -rf .docksal
   rm -rf web/sites/default/files
   rm -rf hosting
@@ -122,6 +120,9 @@ delete_md() {
 ##########################
 # BUILD SCRIPT
 ##########################
+make_heading "Settings up Terminus for Pantheon"
+setup_terminus
+$TERMINUS_BIN self:plugin:install terminus-build-tools-plugin
 
 make_heading "Starting Build"
 
