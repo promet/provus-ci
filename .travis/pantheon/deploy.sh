@@ -98,7 +98,7 @@ check_error() {
   fi
 }
 
-make_mulitdev() {
+make_multidev() {
     echo "...Delete MD if it already exists"
     $TERMINUS_BIN multidev:delete $PANTHEON_SITE_ID.ci-$TRAVIS_BUILD_NUMBER --delete-branch --yes
 
