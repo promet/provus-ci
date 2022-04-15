@@ -69,8 +69,11 @@ update_uuid() {
 # delete files we don't want on Pantheon and copy in some that we do.
 clean_artifacts() {
   make_heading "...Generating site artifacts"
-
-  cp hosting/pantheon/pantheon.upstream.yml .
+  if [ "$PROVUS" == true ] || [ "$PANTHEON_IC" == true ]; then
+    cp hosting/pantheon/pantheon.upstream.yml .
+  else
+    cp hosting/pantheon/pantheon.yml .
+  fi
   cp hosting/pantheon/settings.pantheon.php web/sites/default/
   rm -rf .docksal
   rm -rf web/sites/default/files
@@ -110,7 +113,7 @@ make_multidev() {
 
 # delete the pantheon multidev.. good for failed events before stopping
 delete_md() {
-   if [[ "$CURRENT_BRANCH" != "$PANTHEON_ENV" && "$KEEP_BRANCH" != "$CURRENT_BRANCH" ]]; then
+   if [[ "$CURRENT_BRANCH" != "$PANTHEON_ENV" && "$KEEP_BRANCH" != true ]]; then
     $TERMINUS_BIN multidev:delete $PANTHEON_SITE_ID.ci-$TRAVIS_BUILD_NUMBER --delete-branch --yes
     # if it fails - report the fail and
     check_error "$?"
@@ -182,8 +185,8 @@ else
     quiet_git add -f vendor/* web/* pantheon* config/*
     quiet_git commit -m "Artifacts for build ci-$TRAVIS_BUILD_NUMBER"
     echo "...Push to pantheon"
-    #git push pantheon ci-$TRAVIS_BUILD_NUMBER --force
-    $TERMINUS_BIN build:env:push $PANTHEON_SITE_ID.$PANTHEON_ENV
+    git push pantheon ci-$TRAVIS_BUILD_NUMBER --force
+    #$TERMINUS_BIN build:env:push $PANTHEON_SITE_ID.$PANTHEON_ENV
 
     P_ENV="ci-$TRAVIS_BUILD_NUMBER"
     #clean up / Site updates.
