@@ -101,9 +101,18 @@ check_error() {
   fi
 }
 
+check_md_exist() {
+     branch_list=$($TERMINUS_BIN multidev:list $PANTHEON_SITE_ID --field=Name)
+     if [[ $branch_list == *ci-$TRAVIS_BUILD_NUMBER* ]]; then
+        $TERMINUS_BIN multidev:delete $PANTHEON_SITE_ID.ci-$TRAVIS_BUILD_NUMBER --delete-branch --yes
+     else 
+        echo "...Multidev does not exist"
+     fi
+}
+
 make_multidev() {
     echo "...Delete MD if it already exists"
-    $TERMINUS_BIN multidev:delete $PANTHEON_SITE_ID.ci-$TRAVIS_BUILD_NUMBER --delete-branch --yes
+    check_md_exist
 
     echo "...Building Mutlidev ci-$TRAVIS_BUILD_NUMBER"
     $TERMINUS_BIN multidev:create $PANTHEON_SITE_ID.$PANTHEON_ENV ci-$TRAVIS_BUILD_NUMBER --yes
@@ -114,7 +123,7 @@ make_multidev() {
 # delete the pantheon multidev.. good for failed events before stopping
 delete_md() {
    if [[ "$CURRENT_BRANCH" != "$PANTHEON_ENV" && "$KEEP_BRANCH" != true ]]; then
-    $TERMINUS_BIN multidev:delete $PANTHEON_SITE_ID.ci-$TRAVIS_BUILD_NUMBER --delete-branch --yes
+    check_md_exist
     # if it fails - report the fail and
     check_error "$?"
   fi
