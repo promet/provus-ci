@@ -10,7 +10,7 @@ database:
 search:
   version: 8
 drush_version: 10
-build_step: false
+build_step: true
 protected_web_paths:
   - /private/
   - /sites/default/files/private/

@@ -9,7 +9,7 @@ CURRENT_TAG=`git name-rev --tags --name-only $(git rev-parse HEAD)`
 ##########################
 setup_terminus() {
   cd scripts/bin
-  curl -L https://github.com/pantheon-systems/terminus/releases/download/3.0.6/terminus.phar --output terminus
+  curl -L https://github.com/pantheon-systems/terminus/releases/download/3.3.5/terminus.phar --output terminus
   chmod +x terminus
   ./terminus self:update
   sudo ln -s ~/terminus/terminus terminus
@@ -33,7 +33,13 @@ quiet_git() {
 
 # Update the pantheon sites, updb, cim and clear the cache.
 update_site() {
-sleep 120
+  echo "========================================="
+  echo "...Waiting for workflow to finish"
+  echo "========================================="
+  $TERMINUS_BIN workflow:wait --max=240 --  $PANTHEON_SITE_ID.$1
+  # if it fails - report the fail and
+  check_error "$?"
+
   echo "========================================="
   echo "...Clearing caches"
   echo "========================================="
@@ -168,7 +174,7 @@ if [ $CURRENT_TAG != "undefined" ]; then
   echo "...Switch to new ci-$TRAVIS_BUILD_NUMBER branch locally"
   git checkout -b ci-$TRAVIS_BUILD_NUMBER
 
-  quiet_git add -f vendor/* web/* pantheon* config/*
+  quiet_git add -A . 
   quiet_git commit -m "DEPLOY: Build $CURRENT_TAG"
   echo "...Push to pantheon"
   git push pantheon ci-$TRAVIS_BUILD_NUMBER --force
@@ -191,7 +197,7 @@ else
     echo "...Switch to new ci-$TRAVIS_BUILD_NUMBER branch locally"
     git checkout -b ci-$TRAVIS_BUILD_NUMBER
     echo "...Add the new files"
-    quiet_git add -f vendor/* web/* pantheon* config/*
+    quiet_git add -A .
     quiet_git commit -m "Artifacts for build ci-$TRAVIS_BUILD_NUMBER"
     echo "...Push to pantheon"
     git push pantheon ci-$TRAVIS_BUILD_NUMBER --force
@@ -212,7 +218,7 @@ else
     clean_artifacts
 
     echo "...Add the new files"
-    quiet_git add -f vendor/* web/* pantheon* config/*
+    quiet_git add -A .
     echo "...Committig and pushing to Pantheon"
     quiet_git commit -m "TRAVIS JOB: $TRAVIS_BUILD_NUMBER - ID: $TRAVIS_JOB_ID - $TRAVIS_COMMIT_MESSAGE"
     echo "...Push to pantheon"
