@@ -124,8 +124,6 @@ make_multidev() {
 delete_md() {
    if [[ "$CURRENT_BRANCH" != "$PANTHEON_ENV" && "$KEEP_BRANCH" != true ]]; then
     check_md_exist
-    # if it fails - report the fail and
-    check_error "$?"
   fi
 }
 
