@@ -113,7 +113,6 @@ check_md_exist() {
 make_multidev() {
     echo "...Delete MD if it already exists"
     check_md_exist
-    check_error "$?"
     echo "...Building Mutlidev ci-$TRAVIS_BUILD_NUMBER"
     $TERMINUS_BIN multidev:create $PANTHEON_SITE_ID.$PANTHEON_ENV ci-$TRAVIS_BUILD_NUMBER --yes
     # if it fails - report the fail and
