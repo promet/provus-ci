@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env bash -x
 
 CURRENT_BRANCH=`git name-rev --name-only HEAD`
 CURRENT_TAG=`git name-rev --tags --name-only $(git rev-parse HEAD)`
@@ -9,7 +9,7 @@ CURRENT_TAG=`git name-rev --tags --name-only $(git rev-parse HEAD)`
 ##########################
 setup_terminus() {
   cd scripts/bin
-  curl -L https://github.com/pantheon-systems/terminus/releases/download/3.0.6/terminus.phar --output terminus
+  curl -L https://github.com/pantheon-systems/terminus/releases/download/3.5.1/terminus.phar --output terminus
   chmod +x terminus
   ./terminus self:update
   sudo ln -s ~/terminus/terminus terminus
@@ -103,18 +103,17 @@ check_error() {
 
 check_md_exist() {
      branch_list=$($TERMINUS_BIN multidev:list $PANTHEON_SITE_ID --field=Name)
-     if [[ $branch_list == *ci-$TRAVIS_BUILD_NUMBER* ]]; then
-        $TERMINUS_BIN multidev:delete $PANTHEON_SITE_ID.ci-$TRAVIS_BUILD_NUMBER --delete-branch --yes
+     if [[ $branch_list == *ci-$GH_BUILD_NUMBER* ]]; then
+        $TERMINUS_BIN multidev:delete $PANTHEON_SITE_ID.ci-$GH_BUILD_NUMBER --delete-branch --yes
      else 
         echo "...Multidev does not exist"
      fi
 }
 
 make_multidev() {
-    echo "...Delete MD if it already exists"
     check_md_exist
-    echo "...Building Mutlidev ci-$TRAVIS_BUILD_NUMBER"
-    $TERMINUS_BIN multidev:create $PANTHEON_SITE_ID.$PANTHEON_ENV ci-$TRAVIS_BUILD_NUMBER --yes
+    echo "...Building Mutlidev ci-$GH_BUILD_NUMBER"
+    $TERMINUS_BIN multidev:create $PANTHEON_SITE_ID.$PANTHEON_ENV ci-$GH_BUILD_NUMBER --yes
     # if it fails - report the fail and
     check_error "$?"
 }
@@ -122,8 +121,14 @@ make_multidev() {
 # delete the pantheon multidev.. good for failed events before stopping
 delete_md() {
    if [[ "$CURRENT_BRANCH" != "$PANTHEON_ENV" && "$KEEP_BRANCH" != true ]]; then
-    check_md_exist
+    $TERMINUS_BIN multidev:delete $PANTHEON_SITE_ID.ci-$GH_BUILD_NUMBER --delete-branch --yes
+    # if it fails - report the fail and
   fi
+}
+
+git_init() {
+  git config --local user.email "github-actions[bot]@users.noreply.github.com"
+  git config --local user.name "github-actions[bot]"
 }
 
 ##########################
@@ -161,17 +166,17 @@ if [ $CURRENT_TAG != "undefined" ]; then
 
   # Clean Artifcats
   clean_artifacts
-
-  echo "...Switch to new ci-$TRAVIS_BUILD_NUMBER branch locally"
-  git checkout -b ci-$TRAVIS_BUILD_NUMBER
+  git_init
+  echo "...Switch to new ci-$GH_BUILD_NUMBER branch locally"
+  git checkout -b ci-$GH_BUILD_NUMBER
 
   quiet_git add -f vendor/* web/* pantheon* config/*
   quiet_git commit -m "DEPLOY: Build $CURRENT_TAG"
   echo "...Push to pantheon"
-  git push pantheon ci-$TRAVIS_BUILD_NUMBER --force
+  git push pantheon ci-$GH_BUILD_NUMBER --force
 
-  make_heading "Merge branch ci-$TRAVIS_BUILD_NUMBER into $REMOTE_PROD_BRANCH"
-  $TERMINUS_BIN build:env:merge -n $PANTHEON_SITE_ID.ci-$TRAVIS_BUILD_NUMBER --yes
+  make_heading "Merge branch ci-$GH_BUILD_NUMBER into $REMOTE_PROD_BRANCH"
+  $TERMINUS_BIN build:env:merge -n $PANTHEON_SITE_ID.ci-$GH_BUILD_NUMBER --yes
 
   update_uuid "$REMOTE_PROD_ENV"
   update_site "$REMOTE_PROD_ENV"
@@ -179,22 +184,21 @@ if [ $CURRENT_TAG != "undefined" ]; then
 else
   if [ "$CURRENT_BRANCH" != "$PANTHEON_ENV" ]; then
     make_heading "...Building Branch on new Multidev"
-
     make_multidev
-
     # Clean up the codebase before sending
     clean_artifacts
+    git_init
 
-    echo "...Switch to new ci-$TRAVIS_BUILD_NUMBER branch locally"
-    git checkout -b ci-$TRAVIS_BUILD_NUMBER
+    echo "...Switch to new ci-$GH_BUILD_NUMBER branch locally"
+    git checkout -b ci-$GH_BUILD_NUMBER
     echo "...Add the new files"
     quiet_git add -f vendor/* web/* pantheon* config/*
-    quiet_git commit -m "Artifacts for build ci-$TRAVIS_BUILD_NUMBER"
+    quiet_git commit -m "Artifact built from $GITHUB_SHA by GitHub Action workflow."
     echo "...Push to pantheon"
-    git push pantheon ci-$TRAVIS_BUILD_NUMBER --force
+    git push pantheon ci-$GH_BUILD_NUMBER --force
     #$TERMINUS_BIN build:env:push $PANTHEON_SITE_ID.$PANTHEON_ENV
 
-    P_ENV="ci-$TRAVIS_BUILD_NUMBER"
+    P_ENV="ci-$GH_BUILD_NUMBER"
     #clean up / Site updates.
     update_uuid "$P_ENV"
     update_site "$P_ENV"
@@ -203,17 +207,18 @@ else
 
     make_heading "...Updating Develop Branch"
 
-    git checkout -b ci-$TRAVIS_BUILD_NUMBER
+    git checkout -b ci-$GH_BUILD_NUMBER
 
     # Clean up the codebase before sending
     clean_artifacts
-
+    git_init
+    
     echo "...Add the new files"
     quiet_git add -f vendor/* web/* pantheon* config/*
     echo "...Committig and pushing to Pantheon"
-    quiet_git commit -m "TRAVIS JOB: $TRAVIS_BUILD_NUMBER - ID: $TRAVIS_JOB_ID - $TRAVIS_COMMIT_MESSAGE"
+    quiet_git commit -m "Artifact built from $GITHUB_SHA by GitHub Action workflow."
     echo "...Push to pantheon"
-    git push pantheon ci-$TRAVIS_BUILD_NUMBER:$PANTHEON_ENV --force
+    git push pantheon ci-$GH_BUILD_NUMBER:$PANTHEON_ENV --force
     # set this for doing things on Pantheon later.
     P_ENV=$PANTHEON_ENV
     # Run site updates.
