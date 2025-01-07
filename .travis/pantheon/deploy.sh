@@ -87,8 +87,8 @@ make_heading() {
 }
 
 remove_nests_git() {
-  find web/ | grep .git | xargs rm -rf
-  find vendor/ | grep .git | xargs rm -rf
+  find web/ | grep '\.git' | xargs rm -rf
+  find vendor/ | grep '\.git' | xargs rm -rf
 }
 
 check_error() {
