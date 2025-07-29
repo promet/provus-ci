@@ -1,17 +1,22 @@
 name: Drupal
 
-on: 
+on:
   push:
-    branches: 
+    branches:
       - 'develop'
       - 'feature-*'
       - 'hotfix-*'
   pull_request:
-    branches: 
+    branches:
       - 'develop'
+
+# 👈 Change to 'acquia' if needed
+env:
+  PLATFORM: acquia 
+
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
 
     services:
       docker:
@@ -22,28 +27,47 @@ jobs:
       XDEBUG_MODE: coverage
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Set up PHP
-      uses: shivammathur/setup-php@v2
-      with:
-        php-version: 8.2
-        extensions: mbstring
-        tools: composer
-    - uses: shimataro/ssh-key-action@v2
-      with:
-        key: ${{ secrets.PANTHEON_KEY }}
-        config: ${{ secrets.PANTHEON_SSH_CONFIG }}
-        known_hosts: ${{ secrets.PANTHEON_KNOWN_HOSTS }}     
-    - name: Run deploy script
-      env:
-        PANTHEON_ENV: ${{ secrets.PANTHEON_ENV }}
-        PANTHEON_REPO: ${{ secrets.PANTHEON_REPO }}
-        PANTHEON_SITE_ID: ${{ secrets.PANTHEON_SITE_ID }}
-        SECRET_TERMINUS_TOKEN: ${{ secrets.SECRET_TERMINUS_TOKEN }}
-        GH_BUILD_NUMBER: ${{ github.run_number }}
-        WORK_DIR: ${{ github.workspace }}
-      run: bash .ci/deploy.sh
-    - name: Run script
-      run: |
-        # npm install backstopjs
-        echo "skipping tests"
+      - uses: actions/checkout@v2
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.2
+          extensions: mbstring
+          tools: composer
+
+      # Pantheon-specific setup
+      - name: Set up SSH key for Pantheon
+        if: env.PLATFORM == 'pantheon'
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.PANTHEON_KEY }}
+          config: ${{ secrets.PANTHEON_SSH_CONFIG }}
+          known_hosts: ${{ secrets.PANTHEON_KNOWN_HOSTS }}
+
+      - name: Deploy to Pantheon
+        if: env.PLATFORM == 'pantheon'
+        env:
+          PANTHEON_ENV: ${{ secrets.PANTHEON_ENV }}
+          PANTHEON_REPO: ${{ secrets.PANTHEON_REPO }}
+          PANTHEON_SITE_ID: ${{ secrets.PANTHEON_SITE_ID }}
+          SECRET_TERMINUS_TOKEN: ${{ secrets.SECRET_TERMINUS_TOKEN }}
+          GH_BUILD_NUMBER: ${{ github.run_number }}
+          WORK_DIR: ${{ github.workspace }}
+        run: bash .ci/deploy.sh
+
+      # Acquia-specific setup
+      - name: Set up SSH key for Acquia
+        if: env.PLATFORM == 'acquia'
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.ACQUIA_KEY }}
+          config: ${{ secrets.ACQUIA_SSH_CONFIG }}
+          known_hosts: ${{ secrets.ACQUIA_KNOWN_HOSTS }}
+
+      - name: Deploy to Acquia
+        if: env.PLATFORM == 'acquia'
+        run: bash -x .ci/deploy.sh
+
+      - name: Run script
+        run: echo "skipping tests"
