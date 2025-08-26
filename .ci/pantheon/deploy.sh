@@ -170,7 +170,7 @@ if [ $CURRENT_TAG != "undefined" ]; then
   echo "...Switch to new ci-$GH_BUILD_NUMBER branch locally"
   git checkout -b ci-$GH_BUILD_NUMBER
 
-  quiet_git add -f vendor/* web/* pantheon* config/*
+  quiet_git add -f vendor/* web/* pantheon* config/* .ci/
   quiet_git commit -m "DEPLOY: Build $CURRENT_TAG"
   echo "...Push to pantheon"
   git push pantheon ci-$GH_BUILD_NUMBER --force
@@ -192,7 +192,7 @@ else
     echo "...Switch to new ci-$GH_BUILD_NUMBER branch locally"
     git checkout -b ci-$GH_BUILD_NUMBER
     echo "...Add the new files"
-    quiet_git add -f vendor/* web/* pantheon* config/*
+    quiet_git add -f vendor/* web/* pantheon* config/*  .ci/
     quiet_git commit -m "Artifact built from $GITHUB_SHA by GitHub Action workflow."
     echo "...Push to pantheon"
     git push pantheon ci-$GH_BUILD_NUMBER --force
@@ -214,7 +214,7 @@ else
     git_init
     
     echo "...Add the new files"
-    quiet_git add -f vendor/* web/* pantheon* config/*
+    quiet_git add -f vendor/* web/* pantheon* config/*  .ci/
     echo "...Committig and pushing to Pantheon"
     quiet_git commit -m "Artifact built from $GITHUB_SHA by GitHub Action workflow."
     echo "...Push to pantheon"
