@@ -33,7 +33,13 @@ quiet_git() {
 
 # Update the pantheon sites, updb, cim and clear the cache.
 update_site() {
-sleep 120
+  echo "========================================="
+  echo "...Waiting for workflow to finish"
+  echo "========================================="
+  $TERMINUS_BIN workflow:wait --max=240 --  $PANTHEON_SITE_ID.$1
+  # if it fails - report the fail and
+  check_error "$?"
+
   echo "========================================="
   echo "...Clearing caches"
   echo "========================================="

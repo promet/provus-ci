@@ -1,45 +1,42 @@
 #!/bin/bash
+set -euo pipefail
 
-CURRENT_BRANCH=$(git name-rev --name-only HEAD)
+CURRENT_BRANCH=$(git name-rev --name-only HEAD || echo "unknown")
 CURRENT_TAG=$(git describe --tags --exact-match 2>/dev/null | sed 's/\^0//g' || echo "undefined")
 
-composer install
+composer install --no-interaction --no-progress
 
 SITE_ROOT=$(pwd)
-ACQUIA_SUBFOLDER=$(echo "$SITE_ROOT"/../TMP_ACQUIA)
+ACQUIA_SUBFOLDER="$GITHUB_WORKSPACE/TMP_ACQUIA"
 
 quiet_git() {
-  stdout=$(tempfile)
-  stderr=$(tempfile)
+  local stdout
+  local stderr
+  stdout=$(mktemp)
+  stderr=$(mktemp)
 
-  if ! git "$@" </dev/null >$stdout 2>$stderr; then
-      cat $stderr >&2
-      rm -f $stdout $stderr
+  if ! git "$@" </dev/null >"$stdout" 2>"$stderr"; then
+      cat "$stderr" >&2
+      rm -f "$stdout" "$stderr"
       exit 1
   fi
-  rm -f $stdout $stderr
+  rm -f "$stdout" "$stderr"
 }
 
-remove_acquia_files(){
-    rm -rf $ACQUIA_SUBFOLDER/vendor
-    rm -rf $ACQUIA_SUBFOLDER/web
+remove_acquia_files() {
+    rm -rf "$ACQUIA_SUBFOLDER/vendor" "$ACQUIA_SUBFOLDER/web"
 }
 
-#this part can be changed depending on what needs to be cleared before pushing to repo
-
-cleanup(){
+cleanup() {
     echo "Cleaning up"
-    rm -rf $SITE_ROOT/tests $SITE_ROOT/BEHAT/ $SITE_ROOT/.git*
+    rm -rf "$SITE_ROOT/tests" "$SITE_ROOT/BEHAT/" "$SITE_ROOT/.git*"
     find docroot/ vendor/ -type d -name ".git" -prune -exec rm -rf {} +
-    #rm -f $SITE_ROOT/docroot/sites/default/settings.local.php
 }
 
-#sync files from github to ACQUIA folder
-
-rsync_files(){
-  echo "Rsync of files on going"
+rsync_files() {
+  echo "Rsync of files ongoing"
   echo "---------------------------------------"
-  rsync -a --stats $SITE_ROOT/  $ACQUIA_SUBFOLDER/
+  rsync -a --stats "$SITE_ROOT"/  "$ACQUIA_SUBFOLDER"/
   echo "---------------------------------------"
 }
 
@@ -49,43 +46,51 @@ push() {
   echo "PUSH"
 
   if git ls-remote --heads origin "$add_build" | grep -q "$add_build"; then
-    echo "Branch $add_build exists remotely. Checking it out..."
     git checkout "$add_build"
   else
-    echo "Branch $add_build does not exist. Creating it..."
     git checkout -b "$add_build"
   fi
 
   remove_acquia_files
   rsync_files
 
-  quiet_git add --force docroot vendor hooks scripts drush config patches private .travis composer.*
-  git commit -q -m "Build for $add_build"
-  echo "pushing to acquia"
-  git push origin $add_build --force
+  quiet_git add --force docroot vendor hooks scripts drush config patches private  composer.*
+  quiet_git commit -q -m "Build for $add_build" || echo "No changes to commit"
+  echo "Pushing to Acquia..."
+  git push origin "$add_build" --force
 }
 
 tag() {
   git fetch --all
-  echo "Checking if tag exist"
+  echo "Checking if tag exists"
 
- if git rev-parse "$CURRENT_TAG"-build >/dev/null 2>&1; then
-    echo "Tag $CURRENT_TAG-build exists. Deleting..."
-    quiet_git tag -d "$CURRENT_TAG"-build
-    quiet_git push origin ":refs/tags/$CURRENT_TAG-build"
+  if git rev-parse "$CURRENT_TAG" >/dev/null 2>&1; then
+    echo "Tag $CURRENT_TAG exists. Deleting..."
+    quiet_git tag -d "$CURRENT_TAG"
+    quiet_git push origin ":refs/tags/$CURRENT_TAG"
   fi
 
   echo "Deploy tag $CURRENT_TAG"
-  quiet_git add --force docroot vendor hooks scripts drush config patches private .travis composer.*
-  quiet_git commit -m "Pushing tag to $HOSTING_PLATFORM..."
-  quiet_git tag -a "$CURRENT_TAG"-build -m "Deployment tag for $CURRENT_TAG"
+  quiet_git add --force docroot vendor hooks scripts drush config patches private  composer.*
+  quiet_git commit -m "Pushing tag to Acquia..." || echo "No changes to commit"
+  quiet_git tag -a "$CURRENT_TAG" -m "Deployment tag for $CURRENT_TAG"
   quiet_git push origin --tags
-  echo "Tag deployment Success"
-  exit 0
+  echo "Tag deployment success"
 }
 
+# ------------------------
 # Start of main script logic
+# ------------------------
+
 cleanup
+
+# Ensure REMOTE_GIT_REPO is set
+if [ -z "${REMOTE_GIT_REPO:-}" ]; then
+  echo "❌ REMOTE_GIT_REPO is not set"
+  exit 1
+fi
+
+rm -rf "$ACQUIA_SUBFOLDER"
 git clone "$REMOTE_GIT_REPO" "$ACQUIA_SUBFOLDER"
 cd "$ACQUIA_SUBFOLDER" || exit
 
@@ -96,5 +101,6 @@ elif [[ "$CURRENT_TAG" != "undefined" ]]; then
   rsync_files
   tag
 else
-  echo "Use proper branch name "
+  echo "❌ Use proper branch name "
 fi
+
