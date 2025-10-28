@@ -14,16 +14,16 @@ add_remote() {
 }
 
 quiet_git() {
-  stdout=$(tempfile)
-  stderr=$(tempfile)
+  stdout=$(mktemp)
+  stderr=$(mktemp)
 
-  if ! git "$@" </dev/null >$stdout 2>$stderr; then
-    cat $stderr >&2
-    rm -f $stdout $stderr
+  if ! git "$@" </dev/null >"$stdout" 2>"$stderr"; then
+    cat "$stderr" >&2
+    rm -f "$stdout" "$stderr"
     exit 1
   fi
 
-  rm -f $stdout $stderr
+  rm -f "$stdout" "$stderr"
 }
 
 set_perms() {
@@ -51,12 +51,17 @@ setup() {
 }
 
 push() {
-  local add_build="${1}-build" # Append -build to the branch name
+  local add_build="${1}-build"
   echo "PUSH"
   git remote -v
-  quiet_git add --force docroot vendor hooks scripts drush config patches private  composer.*
-  quiet_git commit -m "Build for $add_build"
-  git push deploy HEAD:refs/heads/$add_build --force
+
+  # safer add loop
+  for path in docroot vendor hooks scripts drush config patches private composer.*; do
+    [ -e "$path" ] && git add --force "$path"
+  done
+
+  quiet_git commit -m "Build for $add_build" || echo "No changes to commit."
+  quiet_git push deploy HEAD:refs/heads/$add_build --force
 }
 
 tag() {
