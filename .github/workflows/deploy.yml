@@ -22,16 +22,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    services:
-      docker:
-        image: docker:19.03.12
-        options: --privileged
-
     env:
       XDEBUG_MODE: coverage
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Set up PHP
@@ -40,6 +35,25 @@ jobs:
           php-version: 8.2
           extensions: mbstring
           tools: composer
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/composer
+            vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
+      - name: Cache Terminus
+        if: env.PLATFORM == 'pantheon'
+        uses: actions/cache@v4
+        with:
+          path: |
+            scripts/bin/terminus
+            ~/.terminus
+          key: ${{ runner.os }}-terminus-${{ hashFiles('.ci/pantheon/deploy.sh') }}
 
       # Pantheon-specific setup
       - name: Set up SSH key for Pantheon
@@ -57,8 +71,6 @@ jobs:
           PANTHEON_REPO: ${{ secrets.PANTHEON_REPO }}
           PANTHEON_SITE_ID: ${{ secrets.PANTHEON_SITE_ID }}
           SECRET_TERMINUS_TOKEN: ${{ secrets.SECRET_TERMINUS_TOKEN }}
-          GH_BUILD_NUMBER: ${{ github.run_number }}
-          WORK_DIR: ${{ github.workspace }}
         run: bash .ci/deploy.sh
 
       # Acquia-specific setup
@@ -69,11 +81,6 @@ jobs:
           key: ${{ secrets.ACQUIA_KEY }}
           config: ${{ secrets.ACQUIA_SSH_CONFIG }}
           known_hosts: ${{ secrets.ACQUIA_KNOWN_HOSTS }}
-
-      - name: Configure git for CI
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
 
       - name: Deploy to Acquia
         if: env.PLATFORM == 'acquia'

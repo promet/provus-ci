@@ -1,0 +1,42 @@
+language: php
+dist: focal
+
+php:
+  - 8.2
+
+cache:
+  directories:
+    - $HOME/.cache/composer
+    - $HOME/.terminus
+    - scripts/bin
+
+branches:
+  only:
+    - develop
+    - main
+    - master
+    - /^feature-.*$/
+    - /^hotfix-.*$/
+    - /^release-.*$/
+
+env:
+  global:
+    - XDEBUG_MODE=coverage
+
+before_install:
+  - source .ci/.env
+  - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+  - echo "StrictHostKeyChecking no" > ~/.ssh/config
+  # Deploy key must be base64-encoded, e.g. `base64 -i id_rsa | tr -d '\n'`,
+  # and set as a (hidden) Travis repo environment variable.
+  - |
+    if [ "$HOSTING" = "pantheon" ] && [ -n "$PANTHEON_KEY" ]; then
+      openssl base64 -d -A <<< "$PANTHEON_KEY" > ~/.ssh/id_rsa
+    elif [ "$HOSTING" = "acquia" ] && [ -n "$ACQUIA_KEY" ]; then
+      openssl base64 -d -A <<< "$ACQUIA_KEY" > ~/.ssh/id_rsa
+    fi
+  - if [ -f ~/.ssh/id_rsa ]; then chmod 600 ~/.ssh/id_rsa; fi
+
+script:
+  - bash .ci/deploy.sh
+  - echo "skipping tests"

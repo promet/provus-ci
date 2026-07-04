@@ -3,25 +3,52 @@
 CURRENT_BRANCH=`git name-rev --name-only HEAD`
 CURRENT_TAG=`git name-rev --tags --name-only $(git rev-parse HEAD)`
 
+require_env() {
+  local missing=()
+  for var in "$@"; do
+    [ -z "${!var}" ] && missing+=("$var")
+  done
+  if [ "${#missing[@]}" -ne 0 ]; then
+    echo "=========================================" >&2
+    echo "...Missing required environment variable(s): ${missing[*]}" >&2
+    echo "...Check your .ci/.env and CI provider secrets." >&2
+    echo "=========================================" >&2
+    exit 1
+  fi
+}
+
+require_env PANTHEON_SITE_ID PANTHEON_ENV PANTHEON_REPO SECRET_TERMINUS_TOKEN
 
 ##########################
 # FUNCTIONS
 ##########################
+TERMINUS_VERSION="3.5.1"
+
 setup_terminus() {
   cd scripts/bin
-  curl -L https://github.com/pantheon-systems/terminus/releases/download/3.5.1/terminus.phar --output terminus
-  chmod +x terminus
-  ./terminus self:update
-  sudo ln -s ~/terminus/terminus terminus
+  if [ -x terminus ]; then
+    echo "...Using cached Terminus binary"
+  else
+    local attempt
+    for attempt in 1 2 3; do
+      curl -fL --retry 3 --retry-delay 5 \
+        "https://github.com/pantheon-systems/terminus/releases/download/${TERMINUS_VERSION}/terminus.phar" \
+        --output terminus && break
+      echo "...Terminus download attempt $attempt failed, retrying..." >&2
+      [ "$attempt" -eq 3 ] && exit 1
+    done
+    chmod +x terminus
+  fi
   TERMINUS_BIN=scripts/bin/terminus
   cd ../../
 }
 
 quiet_git() {
-  stdout=$(tempfile)
-  stderr=$(tempfile)
+  stdout=$(mktemp)
+  stderr=$(mktemp)
 
   if ! git "$@" </dev/null >$stdout 2>$stderr; then
+      echo "...git $* failed:" >&2
       cat $stderr >&2
       rm -f $stdout $stderr
       exit 1
@@ -75,7 +102,7 @@ update_uuid() {
 # delete files we don't want on Pantheon and copy in some that we do.
 clean_artifacts() {
   make_heading "...Generating site artifacts"
-  if [ "$PROVUS" == true ] || [ "$PANTHEON_IC" == true ]; then
+  if [ "${PROVUS:-false}" == true ] || [ "${PANTHEON_IC:-false}" == true ]; then
     cp hosting/pantheon/pantheon.upstream.yml .
   else
     cp hosting/pantheon/pantheon.yml .
@@ -109,8 +136,8 @@ check_error() {
 
 check_md_exist() {
      branch_list=$($TERMINUS_BIN multidev:list $PANTHEON_SITE_ID --field=Name)
-     if [[ $branch_list == *ci-$GH_BUILD_NUMBER* ]]; then
-        $TERMINUS_BIN multidev:delete $PANTHEON_SITE_ID.ci-$GH_BUILD_NUMBER --delete-branch --yes
+     if [[ $branch_list == *ci-$BUILD_NUMBER* ]]; then
+        $TERMINUS_BIN multidev:delete $PANTHEON_SITE_ID.ci-$BUILD_NUMBER --delete-branch --yes
      else 
         echo "...Multidev does not exist"
      fi
@@ -118,8 +145,8 @@ check_md_exist() {
 
 make_multidev() {
     check_md_exist
-    echo "...Building Mutlidev ci-$GH_BUILD_NUMBER"
-    $TERMINUS_BIN multidev:create $PANTHEON_SITE_ID.$PANTHEON_ENV ci-$GH_BUILD_NUMBER --yes
+    echo "...Building Mutlidev ci-$BUILD_NUMBER"
+    $TERMINUS_BIN multidev:create $PANTHEON_SITE_ID.$PANTHEON_ENV ci-$BUILD_NUMBER --yes
     # if it fails - report the fail and
     check_error "$?"
 }
@@ -127,14 +154,14 @@ make_multidev() {
 # delete the pantheon multidev.. good for failed events before stopping
 delete_md() {
    if [[ "$CURRENT_BRANCH" != "$PANTHEON_ENV" && "$KEEP_BRANCH" != true ]]; then
-    $TERMINUS_BIN multidev:delete $PANTHEON_SITE_ID.ci-$GH_BUILD_NUMBER --delete-branch --yes
+    $TERMINUS_BIN multidev:delete $PANTHEON_SITE_ID.ci-$BUILD_NUMBER --delete-branch --yes
     # if it fails - report the fail and
   fi
 }
 
 git_init() {
-  git config --local user.email "github-actions[bot]@users.noreply.github.com"
-  git config --local user.name "github-actions[bot]"
+  git config --local user.email "ci-bot@provus-ci"
+  git config --local user.name "provus-ci"
 }
 
 ##########################
@@ -142,25 +169,35 @@ git_init() {
 ##########################
 make_heading "Settings up Terminus for Pantheon"
 setup_terminus
-$TERMINUS_BIN self:plugin:install terminus-build-tools-plugin
+if [ -d ~/.terminus/plugins/terminus-build-tools-plugin ]; then
+  echo "...terminus-build-tools-plugin already installed (cache hit)"
+else
+  $TERMINUS_BIN self:plugin:install terminus-build-tools-plugin
+fi
 
 make_heading "Starting Build"
 
 echo "Logging into Terminus"
 $TERMINUS_BIN auth:login --machine-token=$SECRET_TERMINUS_TOKEN
+# if it fails - report the fail and
+check_error "$?"
 $TERMINUS_BIN connection:set $PANTHEON_SITE_ID.$PANTHEON_ENV git -y
+check_error "$?"
 
 echo "Add pantheon repo"
-git remote add pantheon $PANTHEON_REPO
+git remote add pantheon $PANTHEON_REPO 2>/dev/null || git remote set-url pantheon $PANTHEON_REPO
 
 echo "Waking Pantheon $PANTHEON_SITE_ID Dev environment."
 $TERMINUS_BIN env:wake -n $PANTHEON_SITE_ID.$PANTHEON_ENV
+check_error "$?"
 
 make_heading "... Pulling git from $CURRENT_BRANCH"
 git pull
+check_error "$?"
 
 echo "...Run composer install"
-composer install
+composer install --no-interaction --prefer-dist --optimize-autoloader
+check_error "$?"
 
 echo "...remove nested .git dirs from web and vendor directories recursively"
 remove_nests_git
@@ -173,16 +210,16 @@ if [ $CURRENT_TAG != "undefined" ]; then
   # Clean Artifcats
   clean_artifacts
   git_init
-  echo "...Switch to new ci-$GH_BUILD_NUMBER branch locally"
-  git checkout -b ci-$GH_BUILD_NUMBER
+  echo "...Switch to new ci-$BUILD_NUMBER branch locally"
+  git checkout -b ci-$BUILD_NUMBER
 
   quiet_git add -f vendor/* web/* pantheon* config/* .ci/
   quiet_git commit -m "DEPLOY: Build $CURRENT_TAG"
   echo "...Push to pantheon"
-  git push pantheon ci-$GH_BUILD_NUMBER --force
+  git push pantheon ci-$BUILD_NUMBER --force
 
-  make_heading "Merge branch ci-$GH_BUILD_NUMBER into $REMOTE_PROD_BRANCH"
-  $TERMINUS_BIN build:env:merge -n $PANTHEON_SITE_ID.ci-$GH_BUILD_NUMBER --yes
+  make_heading "Merge branch ci-$BUILD_NUMBER into $REMOTE_PROD_BRANCH"
+  $TERMINUS_BIN build:env:merge -n $PANTHEON_SITE_ID.ci-$BUILD_NUMBER --yes
 
   update_uuid "$REMOTE_PROD_ENV"
   update_site "$REMOTE_PROD_ENV"
@@ -195,16 +232,16 @@ else
     clean_artifacts
     git_init
 
-    echo "...Switch to new ci-$GH_BUILD_NUMBER branch locally"
-    git checkout -b ci-$GH_BUILD_NUMBER
+    echo "...Switch to new ci-$BUILD_NUMBER branch locally"
+    git checkout -b ci-$BUILD_NUMBER
     echo "...Add the new files"
     quiet_git add -f vendor/* web/* pantheon* config/*  .ci/
-    quiet_git commit -m "Artifact built from $GITHUB_SHA by GitHub Action workflow."
+    quiet_git commit -m "Artifact built from commit $COMMIT_SHA."
     echo "...Push to pantheon"
-    git push pantheon ci-$GH_BUILD_NUMBER --force
+    git push pantheon ci-$BUILD_NUMBER --force
     #$TERMINUS_BIN build:env:push $PANTHEON_SITE_ID.$PANTHEON_ENV
 
-    P_ENV="ci-$GH_BUILD_NUMBER"
+    P_ENV="ci-$BUILD_NUMBER"
     #clean up / Site updates.
     update_uuid "$P_ENV"
     update_site "$P_ENV"
@@ -213,7 +250,7 @@ else
 
     make_heading "...Updating Develop Branch"
 
-    git checkout -b ci-$GH_BUILD_NUMBER
+    git checkout -b ci-$BUILD_NUMBER
 
     # Clean up the codebase before sending
     clean_artifacts
@@ -222,9 +259,9 @@ else
     echo "...Add the new files"
     quiet_git add -f vendor/* web/* pantheon* config/*  .ci/
     echo "...Committig and pushing to Pantheon"
-    quiet_git commit -m "Artifact built from $GITHUB_SHA by GitHub Action workflow."
+    quiet_git commit -m "Artifact built from commit $COMMIT_SHA."
     echo "...Push to pantheon"
-    git push pantheon ci-$GH_BUILD_NUMBER:$PANTHEON_ENV --force
+    git push pantheon ci-$BUILD_NUMBER:$PANTHEON_ENV --force
     # set this for doing things on Pantheon later.
     P_ENV=$PANTHEON_ENV
     # Run site updates.

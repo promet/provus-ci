@@ -3,14 +3,28 @@
 CURRENT_BRANCH=`git name-rev --name-only HEAD`
 CURRENT_TAG=`git name-rev --tags --name-only $(git rev-parse HEAD)`
 
-composer install
+require_env() {
+  local missing=()
+  for var in "$@"; do
+    [ -z "${!var}" ] && missing+=("$var")
+  done
+  if [ "${#missing[@]}" -ne 0 ]; then
+    echo "=========================================" >&2
+    echo "...Missing required environment variable(s): ${missing[*]}" >&2
+    echo "...Check your .ci/.env and CI provider secrets." >&2
+    echo "=========================================" >&2
+    exit 1
+  fi
+}
+
+require_env REMOTE_GIT_REPO
 
 remove_nests_git() {
   find docroot/ vendor/ -type d -name ".git" -prune -exec rm -rf {} +
 }
 
 add_remote() {
-  git remote add deploy $REMOTE_GIT_REPO
+  git remote add deploy $REMOTE_GIT_REPO 2>/dev/null || git remote set-url deploy $REMOTE_GIT_REPO
 }
 
 quiet_git() {
@@ -18,6 +32,7 @@ quiet_git() {
   stderr=$(mktemp)
 
   if ! git "$@" </dev/null >"$stdout" 2>"$stderr"; then
+    echo "...git $* failed:" >&2
     cat "$stderr" >&2
     rm -f "$stdout" "$stderr"
     exit 1
@@ -32,8 +47,9 @@ set_perms() {
   chmod u+x docroot/sites/default/files
 }
 
-pantheon_conn_switch() {
-  $TERMINUS_BIN connection:set ${PANTHEON_SITE_NAME}.dev $1
+git_init() {
+  git config --local user.email "ci-bot@provus-ci"
+  git config --local user.name "provus-ci"
 }
 
 build() {
@@ -43,8 +59,10 @@ build() {
 
 setup() {
   echo "SETUP"
+  composer install --no-interaction --prefer-dist --optimize-autoloader || exit 1
   remove_nests_git
   add_remote
+  git_init
   # uncomment calling build If you have customer build function
   #build
   set_perms
